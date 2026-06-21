@@ -1,0 +1,13 @@
+<?
+	const alexa=service_require("web/alexa/alexa-remote");
+	let text=unescape(input.text||"");
+
+	if(!text) return response.write("Eyy du ?text=Hallo musst du setzten");
+
+	response.write("Alexa spricht den Text...\n");
+	log(text)
+	if(text==="Lennart-Hat-den-Link-Geöffnet") text="lennart is schwuhl!"
+	await new Promise(r=>alexa.speak(text,r));
+	response.write("Landos Alexa hat den Text gesprochen\n")
+
+?>OK
