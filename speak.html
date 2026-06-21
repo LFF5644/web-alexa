@@ -1,0 +1,33 @@
+<?
+	const alexa=service_require("web/alexa/alexa-remote");
+	if(input.name&&input.text){
+		const name=unescape(input.name).toLowerCase().split("+").join(" ");
+		let text=unescape(input.text).toLowerCase().split("+").join(" ");
+
+		if(text.endsWith("?")) text+=" fragt, "+name;
+		else if(text.endsWith("!")) text+=" schreit, "+name;
+		else text+=" sagt, "+name;
+		
+		log("SPRICHT: "+text);
+		alexa.speak(text)
+	};
+?><!DOCTYPE html>
+<html>
+	<head>
+		<title>Alexa spricht</title>
+		<link rel=stylesheet href=/css/main.dark.css>
+		<link rel=stylesheet href=/css/main.css>
+		<meta charset=utf-8>
+		<meta name=viewport content="width=device-width, initial-scale=1.0">
+	</head>
+	<body>
+		<h1>Gib Text ein, der gesprochen werden soll</h1>
+		<p>Fun fakt, mein Zimmer ist bei <span style=color:red;><?=alexa.room_temperature?> °C</span></p>
+		<?if(input.text){?><p>Text wurde gesendet, <a href="" style=color:gold onclick="return confirm('NERV MICH BESSER NICH GRR, Trozdem absenden?')">nochmal Spamen</a>?</p><?}?>
+		<form id="abc">
+			<p>Name <input name=name required></p>
+			<p>Text <input name=text required></p>
+			<p><button form="abc">Senden & Sprechen</button></p>
+		</form>
+	</body>
+</html>
