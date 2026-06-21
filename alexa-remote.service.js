@@ -14,6 +14,8 @@ const ALEXA_OPTS = {
 	amazonPage: 'amazon.de',
 	alexaServiceHost: 'alexa.amazon.de',
 	acceptLanguage: 'de-DE',
+	proxyOwnIp: "192.168.178.48",
+	proxyPort: 8001,
 	useWsMqtt: true,                  // Push-Verbindung an
 	//autoQueryActivityOnTrigger: true, // bei jedem Trigger automatisch den Transkript-Text holen
 	bluetooth: false,
