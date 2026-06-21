@@ -1,0 +1,1 @@
+<?=service_require('web/alexa/alexa-remote').room_temperature?> °C
