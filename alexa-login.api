@@ -1,0 +1,5 @@
+<?
+// if open: "lff.one/alexa-login" --> http://192.168.178.98:3001/
+response.setHeader("Location","http://192.168.178.98:3001/");
+throw 302;
+?>
