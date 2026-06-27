@@ -19,11 +19,11 @@ const ALEXA_OPTS = {
 };
 
 const create_account_template=id=>({
-	id,
 	alexa: new Alexa(),
 	cookie: null,
 	entities: [],
 	entityIds: [],
+	id,
 	ready: false,
 });
 
@@ -83,7 +83,7 @@ const hasAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.find
 const findEntity=entityId=>Object.keys(svr.accounts).map(item=>item[1].entities).map(accEnt=>accEnt.find(item=>item.id===entityId)).filter(Boolean)[0]||throw_error("entityId dont exists in any accounts: "+entityId);
 const refreshEntitiesFullStructure=async accountId=>{
 	const account=getAccount(accountId);
-	log("Update aller Identitäten & Geräten ...");
+	log("Update aller Identitäten & Geräten für "+accountId+" ...");
 	if(!await new Promise(resolve=>account.alexa.getSmarthomeEntities((err,entries)=>{
 		if(err) return resolve(log("Fehler refreshEntitiesFullStructure getSmarthomeEntities bei "+accountId+"! "+err.message) || console.error(err) && false);
 		if(!(entries&&entries.length)||!Array.isArray(entries)) return resolve(log("Fehler getSmarthomeEntities gibt kein gültiges Array oder Leeres Array zurück")&&false);
@@ -106,13 +106,14 @@ const refreshEntitiesFullStructure=async accountId=>{
 			else{
 				log("new entity: "+accountId+", "+entry_new.displayName);
 				account.entities.push(entry_new);
+				account.entityIds.push(entry_new.id);
 			}
 			console.log("SmarthomeEntry SERVICE OBJECT:",entry_new);
 		}
 		return true;
 	}))) return log("Abbruch von refreshEntitiesFullStructure für Account "+accountId);
 
-	
+	//account.alexa.querySmarthomeDevices(account.entityIds, 'ENTITY',err)
 
 }
 
