@@ -80,6 +80,7 @@ const getAccount=accountId=>svr.accounts[accountId]||throw_error("accountId not 
 const hasAccount=accountId=>svr.accounts[accountId]!==undefined;
 const getAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.find(entity=>entity.id===entityId)||throw_error("account "+accountId+" dont have entity "+entityId);
 const hasAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.find(entity=>entity.id===entityId)!==undefined;
+const filterAccountEntityByData=(accountId,entityDataNamespace)=>getAccount(accountId).entities.filter(entity=>entity.data.has(entityDataNamespace)).map(item=>item.id);
 const findEntity=entityId=>Object.keys(svr.accounts).map(item=>item[1].entities).map(accEnt=>accEnt.find(item=>item.id===entityId)).filter(Boolean)[0]||throw_error("entityId dont exists in any accounts: "+entityId);
 const refreshEntitiesFullStructure=async accountId=>{
 	const account=getAccount(accountId);
@@ -150,7 +151,7 @@ const refreshEntitiesFullStructure=async accountId=>{
 				}
 			}
 			entity.data.lastDataFetch=now;
-			console.log(entity);
+			//console.log(entity);
 
 		}
 		resolve(true);
@@ -204,13 +205,24 @@ const stop=()=>{
 	save(true);
 	log("ende.");
 }
-const onAlexaAccountConnected=(accountId,err)=>{
+const onAlexaAccountConnected=async (accountId,err)=>{
 	const account=getAccount(accountId);
 	if(err) return log("Verbindung mit Account '"+accountId+"' nicht möglich, ALEXA.INIT Fehler: "+(err.message||err))||console.error(err)&&false;
 	log("onAlexaAccountConnected: account "+accountId+" verbunden.");
 	account.ready=true;
 
-	refreshEntitiesFullStructure(accountId);
+	await refreshEntitiesFullStructure(accountId);
+
+	// TEST //
+	{
+		const ids=filterAccountEntityByData(accountId,"TemperatureSensor");
+		for(const entityId of ids){
+			const entity=getAccountEntity(accountId,entityId);
+			const {value,scale}=entity.data.get("TemperatureSensor").temperature;
+			const {displayName}=entity;
+			log("TemperatureSensor: "+displayName+": "+value+" "+scale);
+		}
+	}
 }
 
 await load();
