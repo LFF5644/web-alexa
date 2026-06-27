@@ -92,6 +92,7 @@ const refreshEntitiesFullStructure=async accountId=>{
 			//console.log("SmarthomeEntry:",entry);
 			const entry_new={
 				availability: entry.availability,
+				data: new Map(),
 				description: entry.description,
 				deviceType: entry.providerData.deviceType,
 				displayName: entry.displayName,
@@ -108,12 +109,54 @@ const refreshEntitiesFullStructure=async accountId=>{
 				account.entities.push(entry_new);
 				account.entityIds.push(entry_new.id);
 			}
-			console.log("SmarthomeEntry SERVICE OBJECT:",entry_new);
+			//console.log("SmarthomeEntry SERVICE OBJECT:",entry_new);
 		}
-		return true;
+
+		resolve(true);
 	}))) return log("Abbruch von refreshEntitiesFullStructure für Account "+accountId);
 
-	//account.alexa.querySmarthomeDevices(account.entityIds, 'ENTITY',err)
+	if(!await new Promise(resolve=>account.alexa.querySmarthomeDevices(account.entityIds, 'ENTITY',(err,entriesData)=>{
+		if(err) return resolve(log("Fehler refreshEntitiesFullStructure querySmarthomeDevices bei "+accountId+"! "+err.message)||console.error(err)&&false);
+		//console.log(JSON.stringify(entriesData.deviceStates,null,2));
+
+		for(const item of entriesData.deviceStates){
+			if(!hasAccountEntity(accountId,item.entity.entityId)){log("entity not exits: "+item.entity.entityId);continue}
+			const entity=getAccountEntity(accountId,item.entity.entityId);
+
+			if(item.entity.entityType!=="ENTITY"){log("NOT AN ENTITY WTF"); continue}
+			if(!item.capabilityStates){log("Entity dont have capabilityStates"); continue}
+			const now=Date.now();
+			for(let state of item.capabilityStates){
+				try{state=JSON.parse(state);}catch(e){log("cant parse entity.capabilityStates[x] to JSON!");continue}
+				//console.log(state);
+				let namespace=state.namespace; // namespace: 'Alexa.PowerController' --> "PowerController"
+				if(namespace.startsWith("Alexa.")) namespace=namespace.substring("Alexa.".length); // Removes "Alexa." at start because stupid xD
+				if(namespace.includes(".")) namespace=namespace.split(".").join(""); // Removes strange dots
+				const name=state.name;
+				let value=state.value;
+				//value=JSON.parse(value);
+				const keys=Object.keys(value);
+				if(keys.length===1){ // { value: 'OK' } --> "OK"
+					value=value[keys[0]];
+				}
+				// SET entity.data.TemperatureSensor.temperature == { value: 29.8, scale: 'CELSIUS' }
+				if(entity.data.has(namespace)){
+					Object.assign(entity.data.get(namespace),{
+						[name]: value,
+					});
+				}
+				else{
+					entity.data.set(namespace,{[name]:value});
+				}
+			}
+			entity.data.lastDataFetch=now;
+			console.log(entity);
+
+		}
+		resolve(true);
+	}))) return log("Abbruch von refreshEntitiesFullStructure für Account "+accountId);
+
+	console.log("OK")
 
 }
 
