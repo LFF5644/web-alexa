@@ -19,9 +19,10 @@ const ALEXA_OPTS = {
 };
 
 const create_account_template=id=>({
+	id,
 	alexa: new Alexa(),
 	cookie: null,
-	entities: new Map(),
+	entities: [],
 	entityIds: [],
 	ready: false,
 });
@@ -39,46 +40,85 @@ const load=async()=>{
 	
 	log("Lade Accounts: "+svr.cfg.accountIds.join(", ")+" ...");
 	for(const accountId of svr.cfg.accountIds){
-		const account={
-			...create_account_template(),
-			...svr.accounts[accountId]||{},
-			cookie: await rtjscomp.data_load("alexa/account_"+accountId+"/secret_cookie.json"),
-		};
-		svr.accounts[accountId]=account;
+		let account=undefined;
+		if(hasAccount(accountId)){
+			log("loading and modifying account: "+accountId);
+			account=Object.assign(getAccount(accountId),{
+				cookie: await rtjscomp.data_load("alexa/account_"+accountId+"/secret_cookie.json"),
+			});
+		}
+		else{
+
+			// TODO Check if "alexa/account_xx" not exists, so program dont have to crash xD
+			svr.accounts[accountId]={
+				...create_account_template(accountId),
+				cookie: await rtjscomp.data_load("alexa/account_"+accountId+"/secret_cookie.json"),
+			}
+			account=getAccount(accountId);
+		}
 	}
 }
-const save=async()=>{
-	if(!svr.started) return log("save: service not started yet, save later ...")&&false;
+const save=async(careful_save)=>{
+	if(!svr.started&&!careful_save) return log("save: service not started yet, save later ...")&&false;
 	for(const accountId of svr.cfg.accountIds){
-		const account=svr.accounts[accountId];
+		const account=getAccount(accountId);
+		if(careful_save) log("CAREFUL_SAVE: "+accountId+", cookie changed: "+JSON.stringify(account.alexa.cookieData)!==JSON.stringify(account.cookie))
 		if(!account.ready) continue;
 		if(account.alexa&&account.alexa.cookieData){
 			if(JSON.stringify(account.alexa.cookieData)!==JSON.stringify(account.cookie)){
 				log("Save: Account Cookie von "+accountId+" geändert, speichere...");
 				await rtjscomp.data_save("alexa/account_"+accountId+"/secret_cookie.json",account.alexa.cookieData);
 				log("Datei: "+"alexa/account_"+accountId+"/secret_cookie.json"+" wurde GESPEICHERT.");
+				Object.assign(account.cookie,account.alexa.cookieData);
 			}
 		}
+		else log("not saving account cookieData, because not exists for acc: "+accountId);
 	}
 };
+const throw_error=message=>{throw message; return false}
+const getAccount=accountId=>svr.accounts[accountId]||throw_error("accountId not exists: "+accountId);
+const hasAccount=accountId=>svr.accounts[accountId]!==undefined;
+const getAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.find(entity=>entity.id===entityId)||throw_error("account "+accountId+" dont have entity "+entityId);
+const hasAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.find(entity=>entity.id===entityId)!==undefined;
+const findEntity=entityId=>Object.keys(svr.accounts).map(item=>item[1].entities).map(accEnt=>accEnt.find(item=>item.id===entityId)).filter(Boolean)[0]||throw_error("entityId dont exists in any accounts: "+entityId);
 const refreshEntitiesFullStructure=async accountId=>{
-	const account=svr.accounts[accountId];
+	const account=getAccount(accountId);
 	log("Update aller Identitäten & Geräten ...");
 	if(!await new Promise(resolve=>account.alexa.getSmarthomeEntities((err,entries)=>{
 		if(err) return resolve(log("Fehler refreshEntitiesFullStructure getSmarthomeEntities bei "+accountId+"! "+err.message) || console.error(err) && false);
 		if(!(entries&&entries.length)||!Array.isArray(entries)) return resolve(log("Fehler getSmarthomeEntities gibt kein gültiges Array oder Leeres Array zurück")&&false);
+		log("Durchsuche "+entries.length+" Entities ...");
 		for(const entry of entries){
-			console.log("SmarthomeEntry:",entry);
-			
+			//console.log("SmarthomeEntry:",entry);
+			const entry_new={
+				availability: entry.availability,
+				description: entry.description,
+				deviceType: entry.providerData.deviceType,
+				displayName: entry.displayName,
+				id: entry.id,
+				supportedOperations: entry.supportedOperations||[],
+				supportedProperties: entry.supportedProperties||[],
+			};
+			if(hasAccountEntity(accountId,entry.id)){
+				log("update entity: "+accountId+", "+entry_new.displayName);
+				Object.assign(getAccountEntity(accountId,entry.id),entry_new);
+			}
+			else{
+				log("new entity: "+accountId+", "+entry_new.displayName);
+				account.entities.push(entry_new);
+			}
+			console.log("SmarthomeEntry SERVICE OBJECT:",entry_new);
 		}
 		return true;
 	}))) return log("Abbruch von refreshEntitiesFullStructure für Account "+accountId);
+
+	
 
 }
 
 const start=()=>{
 	for(const accountId of svr.cfg.accountIds){
-		const account=svr.accounts[accountId];
+		const account=getAccount(accountId);
 		if(account.ready){log("account "+accountId+" is still ready not starting once more, stop first!");continue}
 		account.ready=false;
 
@@ -92,6 +132,7 @@ const start=()=>{
 
 	}
 	svr.started=true;
+	if(interval_save) clearInterval(interval_save);
 	interval_save=setInterval(save,INTERVAL_MS_SAVE);
 }
 const stop=()=>{
@@ -101,7 +142,7 @@ const stop=()=>{
 	svr.started=false;
 	
 	for(const accountId of svr.cfg.accountIds){
-		const account=svr.accounts[accountId];
+		const account=getAccount(accountId);
 		if(!account.ready) continue;
 		log("stoppe alexa für account "+accountId);
 		try{
@@ -116,14 +157,16 @@ const stop=()=>{
 	}
 	//delete svr.cfg;
 	//delete svr.accounts;
+	save(true);
+	log("ende.");
 }
 const onAlexaAccountConnected=(accountId,err)=>{
-	const account=svr.accounts[accountId];
-	if(err) return log("Verbindung mit Account '"+accountId+"' nicht möglich, ALEXA.INIT Fehler: "+(err.message||err));
+	const account=getAccount(accountId);
+	if(err) return log("Verbindung mit Account '"+accountId+"' nicht möglich, ALEXA.INIT Fehler: "+(err.message||err))||console.error(err)&&false;
 	log("onAlexaAccountConnected: account "+accountId+" verbunden.");
 	account.ready=true;
 
-	//refreshEntitiesFullStructure(accountId);
+	refreshEntitiesFullStructure(accountId);
 }
 
 await load();
