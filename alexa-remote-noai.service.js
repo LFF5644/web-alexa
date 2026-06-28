@@ -81,9 +81,9 @@ const throw_error=message=>{throw new Error(message); return false}
 const getAccount=accountId=>svr.accounts[accountId]||throw_error("getAccount: accountId not exists: "+accountId); // use 'hasAccount(id)' to check
 const hasAccount=accountId=>svr.accounts[accountId]!==undefined;
 const getAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.find(entity=>entity.id===entityId)||throw_error("account "+accountId+" dont have entity with 'ID' "+entityId);
-const hasAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.find(entity=>entity.id===entityId)!==undefined;
-const getAccountEntityBySerial=(accountId,entitySerial)=>getAccount(accountId).entities.find(entity=>entity.serialNumber===entitySerial)||throw_error("account "+accountId+" dont have entity with 'SerialNumber' "+entitySerial);
-const hasAccountEntityBySerial=(accountId,entitySerial)=>getAccount(accountId).entities.find(entity=>entity.serialNumber===entitySerial)!==undefined;
+const hasAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.some(entity=>entity.id===entityId);
+const getAccountEntityBy=(accountId,entityKey,entityValue)=>getAccount(accountId).entities.find(entity=>entity[entityKey]===entityValue)||throw_error("account "+accountId+" dont have entity with entity['"+entityKey+"'] == '"+entityValue+"'");
+const hasAccountEntityBy=(accountId,entityKey,entityValue)=>getAccount(accountId).entities.some(entity=>entity[entityKey]===entityValue);
 const filterAccountEntityByData=(accountId,entityDataNamespace)=>getAccount(accountId).entities.filter(entity=>entity.data.has(entityDataNamespace)).map(item=>item.id);
 const filterAccountEntityByCapability=(accountId,entityCapability)=>getAccount(accountId).entities.filter(entity=>entity.capabilities&&entity.capabilities.includes(entityCapability)).map(item=>item.id);
 const findEntity=entityId=>Object.keys(svr.accounts).map(item=>item[1].entities).map(accEnt=>accEnt.find(item=>item.id===entityId)).filter(Boolean)[0]||throw_error("entityId dont exists in any accounts: "+entityId);
@@ -175,8 +175,8 @@ const refreshEntitiesFullStructure=async accountId=>{
 			serialNumber,
 		}=serialEntity;
 		//log("account.alexa.serialNumbers: "+serialNumber)
-		if(!hasAccountEntityBySerial(accountId,serialNumber)) continue;
-		const entity=getAccountEntityBySerial(accountId,serialNumber);
+		if(!hasAccountEntityBy(accountId,"serialNumber",serialNumber)) continue;
+		const entity=getAccountEntityBy(accountId,"serialNumber",serialNumber);
 		log(accountId+": SET: "+entity.displayName+".capabilities = "+capabilities.length);
 		Object.assign(entity,{
 			capabilities,
@@ -204,6 +204,21 @@ const sendCommand=async(accountId,entityId,command,value,cb)=>{
 		else log(accountId+": "+entity.displayName+": speak success");
 		return err;
 	}
+	else if(command==="turnOff"||command==="turnOn"){
+		if(!entity.supportedOperations.includes(command)) throw new Error("sendCommand: entity('"+entity.displayName+"').supportedOperations dont include: "+command);
+		log(accountId+": "+entity.displayName+" (cmd): "+command);
+		const [err,dat]=await new Promise(resolve=>account.alexa.executeSmarthomeDeviceAction([entityId],{action:command},"ENTITY",(err,dat)=>{
+			if(cb) cb(err,dat);
+			resolve([err,dat]);
+		}));
+		if(err) log(accountId+": "+entity.displayName+": "+command+" ERROR: "+e.message);
+		else{
+			log(accountId+": "+entity.displayName+": "+command+" success");
+			//entity.data // TODO CHANGE STATE
+		}
+		return err;
+	}
+	else throw new Error("sendCommand: command dont exists: "+command);
 }
 const speak=(accountId,text)=>{
 	const entityId=filterAccountEntityByCapability(accountId,"AUDIO_PLAYER")[0];
@@ -282,6 +297,12 @@ const onAlexaAccountConnected=async (accountId,err)=>{
 	}
 	// TEST AUDIO_PLAYER //
 	speak(accountId,"RTJSCOMP Service gestartet!");
+
+	// TEST SMART_PLUG //
+	{
+		const entity=getAccountEntityBy(accountId,"displayName","Lichterkette");
+		await sendCommand(accountId,entity.id,"turnOn");
+	}
 }
 
 await load();
