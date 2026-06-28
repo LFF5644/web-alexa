@@ -217,7 +217,10 @@ const start=()=>{
 			account.alexa.init({
 				...ALEXA_OPTS,
 				cookie: {...account.cookie}, // MAYBE FIXING SAVE ISSUS
-			},async(err)=>await onAlexaAccountConnected(accountId,err));
+			},(err)=>onAlexaAccountConnected(accountId,err).then(()=>{}).catch(err=>{
+				log("FEHLER BEIM STARTEN VON ACCOUNT: "+accountId+", Fehler: "+err.message);
+				console.error(err);
+			}));
 		}catch(e){
 			log("Start: Verbindung mit Account '"+accountId+"' nicht möglich, ALEXA.INIT Start Fehler: "+(e.message||e));
 			account.ready=false;
