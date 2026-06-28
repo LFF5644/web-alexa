@@ -80,9 +80,12 @@ const save=async()=>{
 const throw_error=message=>{throw message; return false}
 const getAccount=accountId=>svr.accounts[accountId]||throw_error("accountId not exists: "+accountId);
 const hasAccount=accountId=>svr.accounts[accountId]!==undefined;
-const getAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.find(entity=>entity.id===entityId)||throw_error("account "+accountId+" dont have entity "+entityId);
+const getAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.find(entity=>entity.id===entityId)||throw_error("account "+accountId+" dont have entity with 'ID' "+entityId);
 const hasAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.find(entity=>entity.id===entityId)!==undefined;
+const getAccountEntityBySerial=(accountId,entitySerial)=>getAccount(accountId).entities.find(entity=>entity.serialNumber===entitySerial)||throw_error("account "+accountId+" dont have entity with 'SerialNumber' "+entitySerial);
+const hasAccountEntityBySerial=(accountId,entitySerial)=>getAccount(accountId).entities.find(entity=>entity.serialNumber===entitySerial)!==undefined;
 const filterAccountEntityByData=(accountId,entityDataNamespace)=>getAccount(accountId).entities.filter(entity=>entity.data.has(entityDataNamespace)).map(item=>item.id);
+const filterAccountEntityByCapability=(accountId,entityCapability)=>getAccount(accountId).entities.filter(entity=>entity.capabilities&&entity.capabilities.includes(entityCapability)).map(item=>item.id);
 const findEntity=entityId=>Object.keys(svr.accounts).map(item=>item[1].entities).map(accEnt=>accEnt.find(item=>item.id===entityId)).filter(Boolean)[0]||throw_error("entityId dont exists in any accounts: "+entityId);
 const refreshEntitiesFullStructure=async accountId=>{
 	const account=getAccount(accountId);
@@ -100,6 +103,7 @@ const refreshEntitiesFullStructure=async accountId=>{
 				deviceType: entry.providerData.deviceType,
 				displayName: entry.displayName,
 				id: entry.id,
+				serialNumber: entry.providerData.dmsDeviceIdentifiers.length&&entry.providerData.dmsDeviceIdentifiers[0].deviceSerialNumber||"",
 				supportedOperations: entry.supportedOperations||[],
 				supportedProperties: entry.supportedProperties||[],
 			};
@@ -137,7 +141,6 @@ const refreshEntitiesFullStructure=async accountId=>{
 				if(namespace.includes(".")) namespace=namespace.split(".").join(""); // Removes strange dots
 				const name=state.name;
 				let value=state.value;
-				//value=JSON.parse(value);
 				const keys=Object.keys(value);
 				if(keys.length===1){ // { value: 'OK' } --> "OK"
 					value=value[keys[0]];
@@ -157,9 +160,32 @@ const refreshEntitiesFullStructure=async accountId=>{
 
 		}
 		resolve(true);
-	}))) return log("Abbruch von refreshEntitiesFullStructure für Account "+accountId);
+	}))) return log("Abbruch von refreshEntitiesFullStructure für Account "+accountId)&&false;
 
-	console.log("OK")
+	for(const serial of Object.keys(account.alexa.serialNumbers)){
+		const serialEntity=account.alexa.serialNumbers[serial];
+		const {
+			capabilities,
+			hasMusicPlayer,
+			isControllable,
+			//isMultiroomDevice,
+			//isMultiroomMember,
+			//sendCommand,
+			serialNumber,
+		}=serialEntity;
+		log("account.alexa.serialNumbers: "+serialNumber)
+		if(!hasAccountEntityBySerial(accountId,serialNumber)) continue;
+		const entity=getAccountEntityBySerial(accountId,serialNumber);
+		log("refreshEntitiesFullStructure: add: "+accountId+"; "+entity.displayName+".capabilities = "+capabilities.length)
+		Object.assign(entity,{
+			capabilities,
+			hasMusicPlayer,
+			isControllable,
+			//isMultiroomDevice,
+			//isMultiroomMember,
+			//sendCommand,
+		});
+	}
 
 }
 
@@ -214,11 +240,11 @@ const onAlexaAccountConnected=async (accountId,err)=>{
 	const account=getAccount(accountId);
 	if(err) return log("Verbindung mit Account '"+accountId+"' nicht möglich, ALEXA.INIT Fehler: "+(err.message||err))||console.error(err)&&false;
 	log("onAlexaAccountConnected: account "+accountId+" verbunden.");
-	account.ready=true;
 
 	await refreshEntitiesFullStructure(accountId);
+	account.ready=true;
 
-	// TEST //
+	// TEST TemperatureSensor //
 	{
 		const ids=filterAccountEntityByData(accountId,"TemperatureSensor");
 		for(const entityId of ids){
@@ -226,7 +252,25 @@ const onAlexaAccountConnected=async (accountId,err)=>{
 			const {value,scale}=entity.data.get("TemperatureSensor").temperature;
 			const {displayName}=entity;
 			log("TemperatureSensor: "+displayName+": "+value+" "+scale);
+			//console.log(entity.data);
 		}
+	}
+	// TEST AUDIO_PLAYER //
+	{
+		const ids=filterAccountEntityByCapability(accountId,"AUDIO_PLAYER");
+		console.log(ids);
+		for(const entityId of ids){
+			const entity=getAccountEntity(accountId,entityId);
+			console.log("AUDIO_PLAYER:",entity.displayName);
+			account.alexa.sendSequenceCommand(entity.serialNumber,"speak","Hallo das ist ein test",(err,dat)=>{
+				log("speak end")
+				console.log(err,dat);
+				if(dat.success) log("speak success!");
+			})
+			//console.log(entity.data);
+			console.log("speak started.")
+		}
+		//console.log(account.alexa.serialNumbers);
 	}
 }
 
