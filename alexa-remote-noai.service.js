@@ -77,8 +77,8 @@ const save=async()=>{
 		else log("not saving account cookieData, because not exists for acc: "+accountId);
 	}
 };
-const throw_error=message=>{throw message; return false}
-const getAccount=accountId=>svr.accounts[accountId]||throw_error("accountId not exists: "+accountId);
+const throw_error=message=>{throw new Error(message); return false}
+const getAccount=accountId=>svr.accounts[accountId]||throw_error("getAccount: accountId not exists: "+accountId); // use 'hasAccount(id)' to check
 const hasAccount=accountId=>svr.accounts[accountId]!==undefined;
 const getAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.find(entity=>entity.id===entityId)||throw_error("account "+accountId+" dont have entity with 'ID' "+entityId);
 const hasAccountEntity=(accountId,entityId)=>getAccount(accountId).entities.find(entity=>entity.id===entityId)!==undefined;
@@ -87,6 +87,7 @@ const hasAccountEntityBySerial=(accountId,entitySerial)=>getAccount(accountId).e
 const filterAccountEntityByData=(accountId,entityDataNamespace)=>getAccount(accountId).entities.filter(entity=>entity.data.has(entityDataNamespace)).map(item=>item.id);
 const filterAccountEntityByCapability=(accountId,entityCapability)=>getAccount(accountId).entities.filter(entity=>entity.capabilities&&entity.capabilities.includes(entityCapability)).map(item=>item.id);
 const findEntity=entityId=>Object.keys(svr.accounts).map(item=>item[1].entities).map(accEnt=>accEnt.find(item=>item.id===entityId)).filter(Boolean)[0]||throw_error("entityId dont exists in any accounts: "+entityId);
+
 const refreshEntitiesFullStructure=async accountId=>{
 	const account=getAccount(accountId);
 	log("Update aller Identitäten & Geräten für "+accountId+" ...");
@@ -188,6 +189,22 @@ const refreshEntitiesFullStructure=async accountId=>{
 	}
 
 }
+const sendCommand=async(accountId,entityId,command,value,cb)=>{
+	const account=getAccount(accountId);
+	const entity=getAccountEntity(accountId,entityId);
+	if(command==="speak"){
+		if(!entity.serialNumber) throw new Error(accountId+": sendCommand: speak, not supported, because no SerialNumber for entity: "+entity.displayName);
+		if(!entity.capabilities.includes("AUDIO_PLAYER")) throw new Error(accountId+": sendCommand: speak, not supported, because capability 'AUDIO_PLAYER' not exits for entity: "+entity.displayName);
+		log(accountId+": "+entity.displayName+" (speak): "+value);
+		const [err,dat]=await new Promise(resolve=>account.alexa.sendSequenceCommand(entity.serialNumber,"speak",value,(err,dat)=>{
+			if(cb) cb(err,dat);
+			resolve([err,dat]);
+		}));
+		if(err) log(accountId+": "+entity.displayName+": speak ERROR: "+e.message);
+		else log(accountId+": "+entity.displayName+": speak success");
+		return [err,dat];
+	}
+}
 
 const start=()=>{
 	for(const accountId of svr.cfg.accountIds){
@@ -200,7 +217,7 @@ const start=()=>{
 			account.alexa.init({
 				...ALEXA_OPTS,
 				cookie: {...account.cookie}, // MAYBE FIXING SAVE ISSUS
-			},(err)=>onAlexaAccountConnected(accountId,err));
+			},async(err)=>await onAlexaAccountConnected(accountId,err));
 		}catch(e){
 			log("Start: Verbindung mit Account '"+accountId+"' nicht möglich, ALEXA.INIT Start Fehler: "+(e.message||e));
 			account.ready=false;
@@ -262,13 +279,8 @@ const onAlexaAccountConnected=async (accountId,err)=>{
 		for(const entityId of ids){
 			const entity=getAccountEntity(accountId,entityId);
 			console.log("AUDIO_PLAYER:",entity.displayName);
-			account.alexa.sendSequenceCommand(entity.serialNumber,"speak","Hallo das ist ein test",(err,dat)=>{
-				log("speak end")
-				console.log(err,dat);
-				if(dat.success) log("speak success!");
-			})
-			//console.log(entity.data);
-			console.log("speak started.")
+			const [err]=await sendCommand(accountId,entityId,"speak","RTJSCOMP Service gestartet!");
+			if(err) log("speak error: "+err.message)||console.err(err);
 		}
 		//console.log(account.alexa.serialNumbers);
 	}
