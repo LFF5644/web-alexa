@@ -1,4 +1,6 @@
 const svr=this; // service object
+const v=rtjscomp.verbose&&rtjscomp.verbose.includes("web/alexa/alexa-remote");
+
 svr.cfg={};
 svr.accounts={};
 
@@ -58,19 +60,19 @@ const load=async()=>{
 		}
 	}
 }
-const save=async(careful_save)=>{
-	if(!svr.started&&!careful_save) return log("save: service not started yet, save later ...")&&false;
+const save=async()=>{
 	for(const accountId of svr.cfg.accountIds){
 		const account=getAccount(accountId);
-		if(careful_save) log("CAREFUL_SAVE: "+accountId+", cookie changed: "+JSON.stringify(account.alexa.cookieData)!==JSON.stringify(account.cookie))
-		if(!account.ready) continue;
+		//if(!account.ready) continue;
 		if(account.alexa&&account.alexa.cookieData){
+			log("account: "+accountId+" checking for alexa.cookie");
 			if(JSON.stringify(account.alexa.cookieData)!==JSON.stringify(account.cookie)){
 				log("Save: Account Cookie von "+accountId+" geändert, speichere...");
 				await rtjscomp.data_save("alexa/account_"+accountId+"/secret_cookie.json",account.alexa.cookieData);
 				log("Datei: "+"alexa/account_"+accountId+"/secret_cookie.json"+" wurde GESPEICHERT.");
 				Object.assign(account.cookie,account.alexa.cookieData);
 			}
+			else log("not saving cookie, nothing changed: "+accountId);
 		}
 		else log("not saving account cookieData, because not exists for acc: "+accountId);
 	}
@@ -169,7 +171,10 @@ const start=()=>{
 
 		log("Start: Verbinde Amazon Account "+accountId+" ...");
 		try{
-			account.alexa.init({...ALEXA_OPTS, cookie: account.cookie},(err)=>onAlexaAccountConnected(accountId,err));
+			account.alexa.init({
+				...ALEXA_OPTS,
+				cookie: {...account.cookie}, // MAYBE FIXING SAVE ISSUS
+			},(err)=>onAlexaAccountConnected(accountId,err));
 		}catch(e){
 			log("Start: Verbindung mit Account '"+accountId+"' nicht möglich, ALEXA.INIT Start Fehler: "+(e.message||e));
 			account.ready=false;
@@ -188,7 +193,7 @@ const stop=()=>{
 	
 	for(const accountId of svr.cfg.accountIds){
 		const account=getAccount(accountId);
-		if(!account.ready) continue;
+		//if(!account.ready) continue;
 		log("stoppe alexa für account "+accountId);
 		try{
 			account.alexa.stop();
@@ -202,8 +207,8 @@ const stop=()=>{
 	}
 	//delete svr.cfg;
 	//delete svr.accounts;
-	save(true);
-	log("ende.");
+	save();
+	log("stop: ende");
 }
 const onAlexaAccountConnected=async (accountId,err)=>{
 	const account=getAccount(accountId);
