@@ -174,10 +174,10 @@ const refreshEntitiesFullStructure=async accountId=>{
 			//sendCommand,
 			serialNumber,
 		}=serialEntity;
-		log("account.alexa.serialNumbers: "+serialNumber)
+		//log("account.alexa.serialNumbers: "+serialNumber)
 		if(!hasAccountEntityBySerial(accountId,serialNumber)) continue;
 		const entity=getAccountEntityBySerial(accountId,serialNumber);
-		log("refreshEntitiesFullStructure: add: "+accountId+"; "+entity.displayName+".capabilities = "+capabilities.length)
+		log(accountId+": SET: "+entity.displayName+".capabilities = "+capabilities.length);
 		Object.assign(entity,{
 			capabilities,
 			hasMusicPlayer,
@@ -202,8 +202,13 @@ const sendCommand=async(accountId,entityId,command,value,cb)=>{
 		}));
 		if(err) log(accountId+": "+entity.displayName+": speak ERROR: "+e.message);
 		else log(accountId+": "+entity.displayName+": speak success");
-		return [err,dat];
+		return err;
 	}
+}
+const speak=(accountId,text)=>{
+	const entityId=filterAccountEntityByCapability(accountId,"AUDIO_PLAYER")[0];
+	if(!entityId) throw new Error(accountId+" speak: account dont have any entity with AUDIO_PLAYER capability!");
+	return sendCommand(accountId,entityId,"speak",text);
 }
 
 const start=()=>{
@@ -276,17 +281,7 @@ const onAlexaAccountConnected=async (accountId,err)=>{
 		}
 	}
 	// TEST AUDIO_PLAYER //
-	{
-		const ids=filterAccountEntityByCapability(accountId,"AUDIO_PLAYER");
-		console.log(ids);
-		for(const entityId of ids){
-			const entity=getAccountEntity(accountId,entityId);
-			console.log("AUDIO_PLAYER:",entity.displayName);
-			const [err]=await sendCommand(accountId,entityId,"speak","RTJSCOMP Service gestartet!");
-			if(err) log("speak error: "+err.message)||console.err(err);
-		}
-		//console.log(account.alexa.serialNumbers);
-	}
+	speak(accountId,"RTJSCOMP Service gestartet!");
 }
 
 await load();
