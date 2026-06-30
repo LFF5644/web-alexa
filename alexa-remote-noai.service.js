@@ -1,10 +1,14 @@
 const svr=this; // service object
 const v=rtjscomp.verbose&&rtjscomp.verbose.includes("web/alexa/alexa-remote");
 
+
 svr.cfg={};
 svr.accounts={};
 
 svr.started=false;
+const EMPTY_ARRAY=[];
+const EMPTY_OBJECT={};
+const EMPTY_FUNCTION=()=>{};
 
 const ALEXA_OPTS = {
 	//autoQueryActivityOnTrigger: true, // bei jedem Trigger automatisch den Transkript-Text holen (alt)
@@ -12,13 +16,26 @@ const ALEXA_OPTS = {
 	alexaServiceHost: 'alexa.amazon.de',
 	amazonPage: 'amazon.de',
 	bluetooth: false,
-	logger: () => {},
+	logger: EMPTY_FUNCTION,
 	proxyLogLevel: "warn",
 	proxyOnly: true,
 	proxyOwnIp: "127.0.0.1",
 	proxyPort: 8080,
 	useWsMqtt: true, // Push-Verbindung an
 };
+
+const create_entity_template=id=>({
+	displayName: "",
+	description: "",
+	serialNumber: "",
+	id,
+	deviceType: "",
+	//availability: "",
+	capabilities: EMPTY_ARRAY,
+	data: new Map(),
+	supportedOperations: EMPTY_ARRAY,
+	supportedProperties: EMPTY_ARRAY,
+});
 
 const create_account_template=id=>({
 	alexa: new Alexa(),
@@ -95,29 +112,31 @@ const refreshEntitiesFullStructure=async accountId=>{
 		if(err) return resolve(log("Fehler refreshEntitiesFullStructure getSmarthomeEntities bei "+accountId+"! "+err.message) || console.error(err) && false);
 		if(!(entries&&entries.length)||!Array.isArray(entries)) return resolve(log("Fehler getSmarthomeEntities gibt kein gültiges Array oder Leeres Array zurück")&&false);
 		log("Durchsuche "+entries.length+" Entities ...");
-		for(const entry of entries){
-			//console.log("SmarthomeEntry:",entry);
-			const entry_new={
-				availability: entry.availability,
-				data: new Map(),
-				description: entry.description,
-				deviceType: entry.providerData.deviceType,
-				displayName: entry.displayName,
-				id: entry.id,
-				serialNumber: entry.providerData.dmsDeviceIdentifiers.length&&entry.providerData.dmsDeviceIdentifiers[0].deviceSerialNumber||"",
-				supportedOperations: entry.supportedOperations||[],
-				supportedProperties: entry.supportedProperties||[],
+		for(const entity of entries){
+			//console.log("SmarthomeEntry:",entity);
+			const entity_new={
+				//availability: entity.availability,
+				description: entity.description,
+				deviceType: entity.providerData.deviceType,
+				displayName: entity.displayName,
+				id: entity.id,
+				serialNumber: entity.providerData.dmsDeviceIdentifiers.length&&entity.providerData.dmsDeviceIdentifiers[0].deviceSerialNumber||"",
+				supportedOperations: entity.supportedOperations||EMPTY_ARRAY,
+				supportedProperties: entity.supportedProperties||EMPTY_ARRAY,
 			};
-			if(hasAccountEntity(accountId,entry.id)){
-				log("update entity: "+accountId+", "+entry_new.displayName);
-				Object.assign(getAccountEntity(accountId,entry.id),entry_new);
+			if(hasAccountEntity(accountId,entity.id)){
+				log("update entity: "+accountId+", "+entity_new.displayName);
+				Object.assign(getAccountEntity(accountId,entity.id),entity_new);
 			}
 			else{
-				log("new entity: "+accountId+", "+entry_new.displayName);
-				account.entities.push(entry_new);
-				account.entityIds.push(entry_new.id);
+				log("new entity: "+accountId+", "+entity_new.displayName);
+				account.entities.push({
+					...create_entity_template(entity_new.id),
+					...entity_new,
+				});
+				account.entityIds.push(entity_new.id);
 			}
-			//console.log("SmarthomeEntry SERVICE OBJECT:",entry_new);
+			//console.log("SmarthomeEntry SERVICE OBJECT:",entity_new);
 		}
 
 		resolve(true);
@@ -237,7 +256,7 @@ const start=()=>{
 			account.alexa.init({
 				...ALEXA_OPTS,
 				cookie: {...account.cookie}, // MAYBE FIXING SAVE ISSUS
-			},(err)=>onAlexaAccountConnected(accountId,err).then(()=>{}).catch(err=>{
+			},(err)=>onAlexaAccountConnected(accountId,err).then(EMPTY_FUNCTION).catch(err=>{
 				log("FEHLER BEIM STARTEN VON ACCOUNT: "+accountId+", Fehler: "+err.message);
 				console.error(err);
 			}));
