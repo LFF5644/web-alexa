@@ -65,6 +65,7 @@ const load=async()=>{
 			account=Object.assign(getAccount(accountId),{
 				cookie: await rtjscomp.data_load("alexa/account_"+accountId+"/secret_cookie.json"),
 			});
+			if(!account.cookie) log("load: WARN: kein Cookie für '"+accountId+"', viel Spaß beim Alexa-Login!");
 		}
 		else{
 
@@ -81,13 +82,15 @@ const save=async()=>{
 	for(const accountId of svr.cfg.accountIds){
 		const account=getAccount(accountId);
 		//if(!account.ready) continue;
-		if(account.alexa&&account.alexa.cookieData){
-			log("account: "+accountId+" checking for alexa.cookie");
+		if(account.alexa.cookieData){
+			log("account: "+accountId+" checking for alexa.cookieData");
+			if(!account.cookie) log("save: Derzeit kein Cookie gespeichert!")
 			if(JSON.stringify(account.alexa.cookieData)!==JSON.stringify(account.cookie)){
 				log("Save: Account Cookie von "+accountId+" geändert, speichere...");
 				await rtjscomp.data_save("alexa/account_"+accountId+"/secret_cookie.json",account.alexa.cookieData);
 				log("Datei: "+"alexa/account_"+accountId+"/secret_cookie.json"+" wurde GESPEICHERT.");
-				Object.assign(account.cookie,account.alexa.cookieData);
+				// statt Object.assign(account.cookie, account.alexa.cookieData):
+				account.cookie=JSON.parse(JSON.stringify(account.alexa.cookieData));
 			}
 			else log("not saving cookie, nothing changed: "+accountId);
 		}
@@ -103,7 +106,7 @@ const getAccountEntityBy=(accountId,entityKey,entityValue)=>getAccount(accountId
 const hasAccountEntityBy=(accountId,entityKey,entityValue)=>getAccount(accountId).entities.some(entity=>entity[entityKey]===entityValue);
 const filterAccountEntityByData=(accountId,entityDataNamespace)=>getAccount(accountId).entities.filter(entity=>entity.data.has(entityDataNamespace)).map(item=>item.id);
 const filterAccountEntityByCapability=(accountId,entityCapability)=>getAccount(accountId).entities.filter(entity=>entity.capabilities&&entity.capabilities.includes(entityCapability)).map(item=>item.id);
-const findEntity=entityId=>Object.keys(svr.accounts).map(item=>item[1].entities).map(accEnt=>accEnt.find(item=>item.id===entityId)).filter(Boolean)[0]||throw_error("entityId dont exists in any accounts: "+entityId);
+const findEntity=entityId=>Object.values(svr.accounts).map(item=>item.entities).map(accEnt=>accEnt.find(item=>item.id===entityId)).filter(Boolean)[0]||throw_error("entityId dont exists in any accounts: "+entityId);
 
 const refreshEntitiesFullStructure=async accountId=>{
 	const account=getAccount(accountId);
@@ -219,7 +222,7 @@ const sendCommand=async(accountId,entityId,command,value,cb)=>{
 			if(cb) cb(err,dat);
 			resolve([err,dat]);
 		}));
-		if(err) log(accountId+": "+entity.displayName+": speak ERROR: "+e.message);
+		if(err) log(accountId+": "+entity.displayName+": speak ERROR: "+err.message);
 		else log(accountId+": "+entity.displayName+": speak success");
 		return err;
 	}
@@ -230,7 +233,7 @@ const sendCommand=async(accountId,entityId,command,value,cb)=>{
 			if(cb) cb(err,dat);
 			resolve([err,dat]);
 		}));
-		if(err) log(accountId+": "+entity.displayName+": "+command+" ERROR: "+e.message);
+		if(err) log(accountId+": "+entity.displayName+": "+command+" ERROR: "+err.message);
 		else{
 			log(accountId+": "+entity.displayName+": "+command+" success");
 			//entity.data // TODO CHANGE STATE
