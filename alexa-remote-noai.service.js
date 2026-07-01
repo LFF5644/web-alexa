@@ -1,7 +1,6 @@
 const svr=this; // service object
 const v=rtjscomp.verbose&&rtjscomp.verbose.includes("web/alexa/alexa-remote");
 
-
 svr.cfg={};
 svr.accounts={};
 
@@ -43,17 +42,20 @@ const create_account_template=id=>({
 	entities: [],
 	entityIds: [],
 	id,
+	intervals: [],
 	ready: false,
 });
 
-let interval_save=0; const INTERVAL_MS_SAVE=svr.cfg.INTERVAL_MS_SAVE || 1e3*60*3;
+let interval_save=0; const INTERVAL_MS_SAVE=1e3*60*3;
+const INTERVAL_MS_refreshEntitiesFull=1e3*60*5;
 
 const Alexa=require("alexa-remote2");
 
 const load=async()=>{
 	const loaded_config=await rtjscomp.data_load("alexa/config.json")
 	if(!loaded_config) throw "ERROR: CONFIG: alexa/config.json not exists! CREATE IT FIRST xD";
-	Object.assign(svr.cfg, loaded_config);
+	if(svr.cfg===EMPTY_OBJECT) svr.cfg={...loaded_config};
+	else Object.assign(svr.cfg, loaded_config);
 	
 	if(svr.cfg.ALEXA_OPTS) Object.assign(ALEXA_OPTS, svr.cfg.ALEXA_OPTS);
 	
@@ -70,6 +72,7 @@ const load=async()=>{
 		else{
 
 			// TODO Check if "alexa/account_xx" not exists, so program dont have to crash xD
+			if(svr.accounts===EMPTY_OBJECT) svr.accounts={};
 			svr.accounts[accountId]={
 				...create_account_template(accountId),
 				cookie: await rtjscomp.data_load("alexa/account_"+accountId+"/secret_cookie.json"),
@@ -79,6 +82,7 @@ const load=async()=>{
 	}
 }
 const save=async()=>{
+	if(svr.accounts===EMPTY_OBJECT||svr.cfg===EMPTY_OBJECT) return log("save: svr.accounts or svr.cfg is EMPTY_OBJECT service not started or broken, dont save")&&false;
 	for(const accountId of svr.cfg.accountIds){
 		const account=getAccount(accountId);
 		//if(!account.ready) continue;
@@ -283,6 +287,13 @@ const stop=()=>{
 		const account=getAccount(accountId);
 		//if(!account.ready) continue;
 		log("stoppe alexa für account "+accountId);
+		account.interval=[]
+		while(account.interval.length){
+			const interval=account.interval.shift();
+			log("stop: clearInterval: "+interval[0]+" - "+interval[1]);
+			clearInterval(interval[1]);
+		}
+
 		try{
 			account.alexa.stop();
 		}catch(err){
@@ -305,6 +316,11 @@ const onAlexaAccountConnected=async (accountId,err)=>{
 
 	await refreshEntitiesFullStructure(accountId);
 	account.ready=true;
+
+	account.intervals.push([
+		"refreshEntitiesFull",
+		setInterval(()=>refreshEntitiesFullStructure(accountId),INTERVAL_MS_refreshEntitiesFull),
+	]);
 
 	// TEST TemperatureSensor //
 	{
