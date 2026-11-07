@@ -4,7 +4,7 @@ const v=rtjscomp.verbose&&rtjscomp.verbose.includes("web/alexa/alexa-remote");
 svr.cfg={};
 svr.accounts={};
 
-svr.started=false;
+//svr.started=false;
 const EMPTY_ARRAY=[];
 const EMPTY_OBJECT={};
 const EMPTY_FUNCTION=()=>{};
@@ -152,7 +152,7 @@ const refreshEntitiesFullStructure=async accountId=>{
 	if(!await new Promise(resolve=>account.alexa.querySmarthomeDevices(account.entityIds, 'ENTITY',(err,entriesData)=>{
 		if(err) return resolve(log("Fehler refreshEntitiesFullStructure querySmarthomeDevices bei "+accountId+"! "+err.message)||console.error(err)&&false);
 		//console.log(JSON.stringify(entriesData.deviceStates,null,2));
-		if(!entriesData.deviceStates||entriesData.deviceStates.length===0) return resolve(log("Fehler querySmarthomeDevices gibt kein gültiges Array oder Leeres Array zurück")&&false);
+		if(!entriesData.deviceStates) return resolve(log("Fehler querySmarthomeDevices gibt kein gültiges Array oder Leeres Array zurück")&&false);
 		for(const item of entriesData.deviceStates){
 			if(!hasAccountEntity(accountId,item.entity.entityId)){log("entity not exits: "+item.entity.entityId);continue}
 			const entity=getAccountEntity(accountId,item.entity.entityId);
@@ -273,34 +273,33 @@ const start=()=>{
 		}
 
 	}
-	svr.started=true;
+	//svr.started=true;
 	if(interval_save) clearInterval(interval_save);
 	interval_save=setInterval(save,INTERVAL_MS_SAVE);
 }
 const stop=()=>{
-	if(!svr.started) log("stop: WARNUNG Service nicht richtig gestartet, FORCE STOP...");
+	//if(!svr.started) log("stop: WARNUNG Service nicht richtig gestartet, FORCE STOP...");
 	log("stopping...");
 	clearInterval(interval_save); interval_save=0; save(); // Save & Disable Autosave!
-	svr.started=false;
+	//svr.started=false;
 	
 	for(const accountId of svr.cfg.accountIds){
 		const account=getAccount(accountId);
 		//if(!account.ready) continue;
 		log("stoppe alexa für account "+accountId);
-		account.interval=[]
-		while(account.interval.length){
-			const interval=account.interval.shift();
+		account.ready=false;
+		while(account.intervals.length){
+			const interval=account.intervals.shift();
 			log("stop: clearInterval: "+interval[0]+" - "+interval[1]);
 			clearInterval(interval[1]);
 		}
+		//account.intervals=[];
 
 		try{
 			account.alexa.stop();
 		}catch(err){
 			log("stop: Fehler Account "+accountId+" kann nicht heruntergefahren werden: "+err.message);
 			console.error(err);
-		}finally{
-			account.ready=false;
 		}
 		//delete account;
 	}
@@ -341,9 +340,23 @@ const onAlexaAccountConnected=async (accountId,err)=>{
 		const entity=getAccountEntityBy(accountId,"displayName","Lichterkette");
 		await sendCommand(accountId,entity.id,"turnOn");
 	}
+	return true;
 }
+
+// expose to use global
+Object.assign(svr,{
+	filterAccountEntityByCapability,
+	filterAccountEntityByData,
+	//findEntity,
+	getAccount,
+	getAccountEntity,
+	getAccountEntityBy,
+	hasAccount,
+	hasAccountEntityBy,
+});
 
 await load();
 await start();
+log("STARTED MF!")
 
 return ()=>stop(); // executes when service stops.
