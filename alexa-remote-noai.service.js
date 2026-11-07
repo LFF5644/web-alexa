@@ -152,7 +152,7 @@ const refreshEntitiesFullStructure=async accountId=>{
 	if(!await new Promise(resolve=>account.alexa.querySmarthomeDevices(account.entityIds, 'ENTITY',(err,entriesData)=>{
 		if(err) return resolve(log("Fehler refreshEntitiesFullStructure querySmarthomeDevices bei "+accountId+"! "+err.message)||console.error(err)&&false);
 		//console.log(JSON.stringify(entriesData.deviceStates,null,2));
-
+		if(!entriesData.deviceStates||entriesData.deviceStates.length===0) return resolve(log("Fehler querySmarthomeDevices gibt kein gültiges Array oder Leeres Array zurück")&&false);
 		for(const item of entriesData.deviceStates){
 			if(!hasAccountEntity(accountId,item.entity.entityId)){log("entity not exits: "+item.entity.entityId);continue}
 			const entity=getAccountEntity(accountId,item.entity.entityId);
