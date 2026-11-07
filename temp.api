@@ -1,1 +1,12 @@
-<?=service_require('web/alexa/alexa-remote').room_temperature?> °C
+<?
+const accountId="lff";
+const deviceDisplayName="LFF-Alexa";
+
+const service=service_require('web/alexa/alexa-remote-noai');
+if(service.accounts[accountId].ready==false){
+	?>unknown<?
+	return;
+}
+const entity=service.getAccountEntityBy(accountId,"displayName",deviceDisplayName);
+const temperature=entity.data.get("TemperatureSensor").temperature.value;
+?><?=temperature?>
